@@ -87,12 +87,11 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function generateEntityClass(className: string, formattedName: string, fields: any): string {
-  let serializationMethods = generateSerializationMethods(fields);
   let nestedClasses = generateNestedClasses(fields, className);
   let entityFields = Object.keys(fields)
     .map((key, index) => {
       const fieldType = inferType(fields[key], toPascalCase(key) + 'Entity');
-      const jsonKeyAnnotation = typeof fields[key] === 'object' && fields[key] !== null ? `  @JsonKey(fromJson: ${key}FromMap, toJson: ${key}ToMap)\n  ` : '';
+      const jsonKeyAnnotation = typeof fields[key] === 'object' && fields[key] !== null ? `  @JsonKey(fromJson: ${key}FromMap, toJson: ${key}ToMap)` : '';
       return `  @HiveField(${index})\n  ${jsonKeyAnnotation}final ${fieldType} ${key};`;
     })
     .join('\n\n');
@@ -102,10 +101,8 @@ function generateEntityClass(className: string, formattedName: string, fields: a
     .join('\n');
 
   return `
-
 import '../models/${formattedName}_model.dart';
-
-import 'package:freezed_annotation/freezed_annotation.dart';
+${generateSerializationMethods(fields)}
 import 'package:auto_mappr_annotation/auto_mappr_annotation.dart';
 import '../models/${formattedName}_model.dart';
 
@@ -124,142 +121,10 @@ ${constructorParams}
 
   factory ${className}.fromModel(${className.replace('Entity', 'Model')} model) =>
       const \$${className}().convert<${className.replace('Entity', 'Model')}, ${className}>(model);
-
-
-  factory ${className}.empty() => ${className}(
-    ${Object.keys(fields).map((key) => `${key}: ${getDefaultValue(fields[key], key)},`).join('\n')}
-  );
-  ${serializationMethods}
 }
-  
 
 ${nestedClasses}
 `;
-}
-
-function getDefaultValue(value: any, key: string = ''): string {
-  if (typeof value === 'number') {
-    return '0';
-  } else if (typeof value === 'string') {
-    return "''";
-  } else if (typeof value === 'boolean') {
-    return 'false';
-  } else if (Array.isArray(value)) {
-    return '[]';
-  } else if (typeof value === 'object' && value !== null) {
-    return `${toPascalCase(key)}Entity.empty()`;
-  } else {
-    return 'null';
-  }
-}
-
-
-function generateModelClass(baseClassName: string, formattedName: string, fields: any): string {
-  let constructorParams = Object.keys(fields)
-    .map((key) => `    required super.${key},`)
-    .join('\n');
-
-  let toMapBody = Object.keys(fields)
-    .map((key) => `      '${key}': ${key},`)
-    .join('\n');
-
-  return `import 'package:freezed_annotation/freezed_annotation.dart';
-import '../entities/${formattedName}_entity.dart';
-import '../entities/${formattedName}_entity.dart';
-
-part '${formattedName}_model.g.dart';
-
-@JsonSerializable()
-class ${baseClassName}Model extends ${baseClassName}Entity {
-  ${baseClassName}Model({
-${constructorParams}
-  });
-
-  factory ${baseClassName}Model.fromMap(Map<String, dynamic> json) =>
-      _\$${baseClassName}ModelFromJson(json);
-
-  Map<String, dynamic> toMap() =>
-      _\$${baseClassName}ModelToJson(this);
-}`;
-}
-
-function toPascalCase(str: string): string {
-  return str.replace(/(?:^|_)([a-z])/g, (_, letter) => letter.toUpperCase());
-}
-
-function generateNestedClasses(fields: any, parentClassName: string): string {
-  let nestedClasses = '';
-  Object.keys(fields).forEach((key) => {
-    if (typeof fields[key] === 'object' && fields[key] !== null && !Array.isArray(fields[key])) {
-      const nestedClassName = toPascalCase(key) + 'Entity';
-      nestedClasses += `
-class ${nestedClassName} {
-  ${Object.keys(fields[key])
-    .map((nestedKey) => {
-      const fieldType = typeof fields[key][nestedKey] === 'object' && fields[key][nestedKey] !== null && !Array.isArray(fields[key][nestedKey])
-        ? toPascalCase(nestedKey) + 'Entity'
-        : inferType(fields[key][nestedKey]);
-      return `final ${fieldType} ${nestedKey};`;
-    })
-    .join('\n  ')}
-
-  ${nestedClassName}({
-    ${Object.keys(fields[key]).map((nestedKey) => `required this.${nestedKey},`).join('\n    ')}
-  });
-
-  factory ${nestedClassName}.empty() => ${nestedClassName}(
-    ${Object.keys(fields[key])
-      .map((nestedKey) => {
-        const defaultValue = typeof fields[key][nestedKey] === 'object' && fields[key][nestedKey] !== null && !Array.isArray(fields[key][nestedKey])
-          ? `${toPascalCase(nestedKey)}Entity.empty()`
-          : getDefaultValue(fields[key][nestedKey], nestedKey);
-        return `${nestedKey}: ${defaultValue},`;
-      })
-      .join('\n    ')}
-  );
-
-  Map<String, dynamic> toJson() => {
-    ${Object.keys(fields[key])
-      .map((nestedKey) => `'${nestedKey}': ${nestedKey},`)
-      .join('\n    ')}
-  };
-}
-`;
-      nestedClasses += generateNestedClasses(fields[key], nestedClassName);
-    }
-  });
-  return nestedClasses;
-}
-
-function generateSerializationMethods(fields: any): string {
-  let methods = Object.keys(fields)
-    .filter((key) => Array.isArray(fields[key]) || (typeof fields[key] === 'object' && fields[key] !== null))
-    .map((key) => {
-      if (Array.isArray(fields[key])) {
-        return `
-  static List<${inferType(fields[key], toPascalCase(key)) + 'Entity'}> ${key}FromMap(List<dynamic> json) {
-    return json.map((e) => ${inferType(fields[key], toPascalCase(key)) + 'Entity'}.fromJson(e)).toList();
-  }
-
-  static List<Map<String, dynamic>> ${key}ToMap(List<${inferType(fields[key], toPascalCase(key)) + 'Entity'}> items) {
-    return items.map((e) => e.toJson()).toList();
-  }
-  `;
-      } else {
-        return `
-  static ${inferType(fields[key], toPascalCase(key)) + 'Entity'} ${key}FromMap(Map<String, dynamic> json) {
-    return ${inferType(fields[key], toPascalCase(key)) + 'Entity'}.fromJson(json);
-  }
-
-  static Map<String, dynamic> ${key}ToMap(${inferType(fields[key], toPascalCase(key)) + 'Entity'} instance) {
-    return instance.toJson();
-  }
-  `;
-      }
-    })
-    .join('\n');
-
-  return methods.length > 0 ? methods : '';
 }
 
 function inferType(value: any, parentClassName: string = ''): string {
@@ -270,10 +135,23 @@ function inferType(value: any, parentClassName: string = ''): string {
   } else if (typeof value === 'boolean') {
     return 'bool';
   } else if (Array.isArray(value)) {
-    return 'List<dynamic>';
+    return `List<${parentClassName}>`;
   } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return parentClassName;
   } else {
     return 'dynamic';
   }
+}
+
+function generateSerializationMethods(fields: any): string {
+  return Object.keys(fields)
+    .filter((key) => typeof fields[key] === 'object' && fields[key] !== null)
+    .map((key) => `
+  static ${inferType(fields[key], toPascalCase(key) + 'Entity')} ${key}FromMap(dynamic json) =>
+      ${toPascalCase(key) + 'Entity'}.fromJson(json);
+
+  static dynamic ${key}ToMap(${inferType(fields[key], toPascalCase(key) + 'Entity')} instance) =>
+      instance.toJson();
+  `)
+    .join('\n');
 }

@@ -126,8 +126,8 @@ ${constructorParams}
       const \$${className}().convert<${className.replace('Entity', 'Model')}, ${className}>(model);
 
 
-  factory ${className}.empty() => ${className}(
-    ${Object.keys(fields).map((key) => `${key}: ${getDefaultValue(fields[key], key)},`).join('\n')}
+   factory ${className}.empty() => ${className}(
+    ${Object.keys(fields).map((key) => `${key}: ${getDefaultValue(fields[key])},`).join('')}
   );
   ${serializationMethods}
 }
@@ -137,7 +137,7 @@ ${nestedClasses}
 `;
 }
 
-function getDefaultValue(value: any, key: string = ''): string {
+function getDefaultValue(value: any): string {
   if (typeof value === 'number') {
     return '0';
   } else if (typeof value === 'string') {
@@ -147,7 +147,7 @@ function getDefaultValue(value: any, key: string = ''): string {
   } else if (Array.isArray(value)) {
     return '[]';
   } else if (typeof value === 'object' && value !== null) {
-    return `${toPascalCase(key)}Entity.empty()`;
+    return `${toPascalCase(Object.keys(value)[0])}Entity.empty()`;
   } else {
     return 'null';
   }
@@ -191,46 +191,37 @@ function generateNestedClasses(fields: any, parentClassName: string): string {
   let nestedClasses = '';
   Object.keys(fields).forEach((key) => {
     if (typeof fields[key] === 'object' && fields[key] !== null && !Array.isArray(fields[key])) {
-      const nestedClassName = toPascalCase(key) + 'Entity';
+          const nestedClassName = toPascalCase(key) + 'Entity';
       nestedClasses += `
 class ${nestedClassName} {
   ${Object.keys(fields[key])
-    .map((nestedKey) => {
-      const fieldType = typeof fields[key][nestedKey] === 'object' && fields[key][nestedKey] !== null && !Array.isArray(fields[key][nestedKey])
-        ? toPascalCase(nestedKey) + 'Entity'
-        : inferType(fields[key][nestedKey]);
-      return `final ${fieldType} ${nestedKey};`;
-    })
+    .map((nestedKey) => `final ${inferType(fields[key][nestedKey])} ${nestedKey};`)
     .join('\n  ')}
 
   ${nestedClassName}({
     ${Object.keys(fields[key]).map((nestedKey) => `required this.${nestedKey},`).join('\n    ')}
   });
 
-  factory ${nestedClassName}.empty() => ${nestedClassName}(
-    ${Object.keys(fields[key])
-      .map((nestedKey) => {
-        const defaultValue = typeof fields[key][nestedKey] === 'object' && fields[key][nestedKey] !== null && !Array.isArray(fields[key][nestedKey])
-          ? `${toPascalCase(nestedKey)}Entity.empty()`
-          : getDefaultValue(fields[key][nestedKey], nestedKey);
-        return `${nestedKey}: ${defaultValue},`;
-      })
-      .join('\n    ')}
+   factory ${nestedClassName}.empty() => ${nestedClassName}(
+    ${Object.keys(fields).map((key) => `${key}: ${getDefaultValue(fields[key])},`).join('')}
   );
 
+  factory ${nestedClassName}.fromJson(Map<String, dynamic> json) =>
+      ${nestedClassName}(
+        ${Object.keys(fields[key]).map((nestedKey) => `${nestedKey}: json['${nestedKey}'],`).join('\n        ')}
+      );
+
+
+
   Map<String, dynamic> toJson() => {
-    ${Object.keys(fields[key])
-      .map((nestedKey) => `'${nestedKey}': ${nestedKey},`)
-      .join('\n    ')}
+    ${Object.keys(fields[key]).map((nestedKey) => `'${nestedKey}': ${nestedKey},`).join('\n    ')}
   };
 }
 `;
-      nestedClasses += generateNestedClasses(fields[key], nestedClassName);
     }
   });
   return nestedClasses;
 }
-
 function generateSerializationMethods(fields: any): string {
   let methods = Object.keys(fields)
     .filter((key) => Array.isArray(fields[key]) || (typeof fields[key] === 'object' && fields[key] !== null))

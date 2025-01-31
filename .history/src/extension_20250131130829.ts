@@ -191,46 +191,32 @@ function generateNestedClasses(fields: any, parentClassName: string): string {
   let nestedClasses = '';
   Object.keys(fields).forEach((key) => {
     if (typeof fields[key] === 'object' && fields[key] !== null && !Array.isArray(fields[key])) {
-      const nestedClassName = toPascalCase(key) + 'Entity';
+          const nestedClassName = toPascalCase(key) + 'Entity';
       nestedClasses += `
 class ${nestedClassName} {
   ${Object.keys(fields[key])
-    .map((nestedKey) => {
-      const fieldType = typeof fields[key][nestedKey] === 'object' && fields[key][nestedKey] !== null && !Array.isArray(fields[key][nestedKey])
-        ? toPascalCase(nestedKey) + 'Entity'
-        : inferType(fields[key][nestedKey]);
-      return `final ${fieldType} ${nestedKey};`;
-    })
+    .map((nestedKey) => `final ${inferType(fields[key][nestedKey])} ${nestedKey};`)
     .join('\n  ')}
 
   ${nestedClassName}({
     ${Object.keys(fields[key]).map((nestedKey) => `required this.${nestedKey},`).join('\n    ')}
   });
 
-  factory ${nestedClassName}.empty() => ${nestedClassName}(
-    ${Object.keys(fields[key])
-      .map((nestedKey) => {
-        const defaultValue = typeof fields[key][nestedKey] === 'object' && fields[key][nestedKey] !== null && !Array.isArray(fields[key][nestedKey])
-          ? `${toPascalCase(nestedKey)}Entity.empty()`
-          : getDefaultValue(fields[key][nestedKey], nestedKey);
-        return `${nestedKey}: ${defaultValue},`;
-      })
-      .join('\n    ')}
+   factory ${nestedClassName}.empty() => ${nestedClassName}(
+    ${Object.keys(fields).map((key) => `${key}: ${getDefaultValue(fields[key])},`).join('')}
   );
 
+
+
   Map<String, dynamic> toJson() => {
-    ${Object.keys(fields[key])
-      .map((nestedKey) => `'${nestedKey}': ${nestedKey},`)
-      .join('\n    ')}
+    ${Object.keys(fields[key]).map((nestedKey) => `'${nestedKey}': ${nestedKey},`).join('\n    ')}
   };
 }
 `;
-      nestedClasses += generateNestedClasses(fields[key], nestedClassName);
     }
   });
   return nestedClasses;
 }
-
 function generateSerializationMethods(fields: any): string {
   let methods = Object.keys(fields)
     .filter((key) => Array.isArray(fields[key]) || (typeof fields[key] === 'object' && fields[key] !== null))
