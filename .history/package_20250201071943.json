@@ -4,7 +4,6 @@
   "description": "test",
   "version": "0.0.1",
   "publisher": "Neotin695",
-  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.95.0"
   },

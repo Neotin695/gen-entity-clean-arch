@@ -8,6 +8,7 @@
   "engines": {
     "vscode": "^1.95.0"
   },
+
   "repository": {
     "type": "git",
     "url": "https://github.com/Neotin695/json2dart-arch.git"
