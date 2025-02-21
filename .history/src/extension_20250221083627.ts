@@ -164,8 +164,8 @@ function generateModelClass(baseClassName: string, formattedName: string, fields
     .join('\n');
 
   return `import 'package:freezed_annotation/freezed_annotation.dart';
-import '../../entities/${formattedName}_entity.dart';
-import '../../entities/${formattedName}_entity.dart';
+import '../entities/${formattedName}_entity.dart';
+import '../entities/${formattedName}_entity.dart';
 
 part '${formattedName}_model.g.dart';
 
@@ -281,7 +281,7 @@ function generateSerializationMethods(fields: any): string {
     .filter((key) => Array.isArray(fields[key]) || (typeof fields[key] === 'object' && fields[key] !== null))
     .map((key) => {
       if (Array.isArray(fields[key])) {
-        const itemType = inferType(fields[key][0], toPascalCase(key));
+        const itemType = inferType(fields[key][0], toPascalCase(key) + 'Entity');
         return `
   static List<${itemType}> ${key}FromMap(List<dynamic> json) {
     return json.map((e) => ${itemType}.fromJson(e)).toList();

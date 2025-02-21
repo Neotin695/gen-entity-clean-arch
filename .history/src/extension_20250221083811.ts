@@ -164,8 +164,8 @@ function generateModelClass(baseClassName: string, formattedName: string, fields
     .join('\n');
 
   return `import 'package:freezed_annotation/freezed_annotation.dart';
-import '../../entities/${formattedName}_entity.dart';
-import '../../entities/${formattedName}_entity.dart';
+import '../entities/${formattedName}_entity.dart';
+import '../entities/${formattedName}_entity.dart';
 
 part '${formattedName}_model.g.dart';
 

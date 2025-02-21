@@ -2,7 +2,7 @@
   "name": "entity-model-gen",
   "displayName": "gen entity clean arch",
   "description": "test",
-  "version": "0.0.3",
+  "version": "0.0.1",
   "publisher": "MohamedMehani",
   "icon": "images/icon.png",
   "engines": {
