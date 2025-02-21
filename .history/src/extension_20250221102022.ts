@@ -91,7 +91,7 @@ function generateEntityClass(className: string, formattedName: string, fields: a
   let nestedClasses = generateNestedClasses(fields, className);
   let entityFields = Object.keys(fields)
     .map((key, index) => {
-      const fieldType = inferType(fields[key], toPascalCase(key));
+      const fieldType = inferType(fields[key], toPascalCase(key) + 'Entity');
       const jsonKeyAnnotation = typeof fields[key] === 'object' && fields[key] !== null ? `  @JsonKey(fromJson: ${key}FromMap, toJson: ${key}ToMap)\n  ` : '';
       return `  @HiveField(${index})\n  ${jsonKeyAnnotation}final ${fieldType} ${key};`;
     })

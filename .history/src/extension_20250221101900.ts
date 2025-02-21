@@ -91,7 +91,7 @@ function generateEntityClass(className: string, formattedName: string, fields: a
   let nestedClasses = generateNestedClasses(fields, className);
   let entityFields = Object.keys(fields)
     .map((key, index) => {
-      const fieldType = inferType(fields[key], toPascalCase(key));
+      const fieldType = inferType(fields[key], toPascalCase(key) + 'Entity');
       const jsonKeyAnnotation = typeof fields[key] === 'object' && fields[key] !== null ? `  @JsonKey(fromJson: ${key}FromMap, toJson: ${key}ToMap)\n  ` : '';
       return `  @HiveField(${index})\n  ${jsonKeyAnnotation}final ${fieldType} ${key};`;
     })
@@ -104,7 +104,7 @@ function generateEntityClass(className: string, formattedName: string, fields: a
   return `
 
 import '../models/${formattedName}_model.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:auto_mappr_annotation/auto_mappr_annotation.dart';
 import '../models/${formattedName}_model.dart';
@@ -165,8 +165,8 @@ function generateModelClass(baseClassName: string, formattedName: string, fields
 
   return `import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../entities/${formattedName}_entity.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../entities/${formattedName}_entity.dart';
-
 
 part '${formattedName}_model.g.dart';
 
@@ -324,7 +324,7 @@ function inferType(value: any, parentClassName: string = ''): string {
     }
     return `List<dynamic>`; // Default if empty
   } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return toPascalCase(parentClassName) + 'Entity'; // Properly assign entity class name
+    return toPascalCase(parentClassName); // Properly assign entity class name
   } else {
     return 'dynamic';
   }
