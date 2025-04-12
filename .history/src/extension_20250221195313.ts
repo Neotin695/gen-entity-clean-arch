@@ -221,117 +221,53 @@ function generateSerializationMethods(fields: any): string {
 
   return methods.length > 0 ? methods : '';
 }
-// Helper function to merge multiple objects into one with the union of all keys.
-function mergeObjects(arr: any[]): any {
-  return arr.reduce((acc, obj) => {
-    if (typeof obj === 'object' && obj !== null) {
-      Object.keys(obj).forEach(key => {
-        if (!(key in acc)) {
-          acc[key] = obj[key];
-        } else {
-          // If types differ, you might want to default to a safe value or leave it as-is.
-          const currentType = inferType(acc[key], toPascalCase(key));
-          const newType = inferType(obj[key], toPascalCase(key));
-          if (currentType !== newType) {
-            // You can opt to mark it as dynamic or null.
-            acc[key] = null;
-          }
-        }
-      });
-    }
-    return acc;
-  }, {});
-}
-
-function inferListType(arr: any[], parentClassName: string): string {
-  // Map each item to its inferred type.
-  const types = arr.map(item => inferType(item, parentClassName));
-  if (types.every(t => t === types[0])) {
-    return types[0];
-  } else {
-    // Fallback to dynamic for heterogeneous types.
-    return 'dynamic';
-  }
-}
-
-function inferType(value: any, parentClassName: string = ''): string {
-  if (typeof value === 'number') {
-    return 'int';
-  } else if (typeof value === 'string') {
-    return 'String';
-  } else if (typeof value === 'boolean') {
-    return 'bool';
-  } else if (Array.isArray(value)) {
-    if (value.length > 0) {
-      // If array items are objects, merge them to infer a common type.
-      if (typeof value[0] === 'object' && value[0] !== null) {
-        // The nested class name will be based on the parentClassName.
-        return `List<${toPascalCase(parentClassName)}Entity>`;
-      } else {
-        const itemType = inferListType(value, toPascalCase(parentClassName));
-        return `List<${itemType}>`;
-      }
-    }
-    return `List<dynamic>`;
-  } else if (typeof value === 'object' && value !== null) {
-    return toPascalCase(parentClassName) + 'Entity';
-  } else {
-    return 'dynamic';
-  }
-}
 
 function generateNestedClasses(fields: any, parentClassName: string): string {
   let nestedClasses = '';
 
   Object.keys(fields).forEach((key) => {
-    if (
-      Array.isArray(fields[key]) &&
-      fields[key].length > 0 &&
-      typeof fields[key][0] === 'object'
-    ) {
-      // For arrays of objects, merge all items to handle heterogeneous keys.
-      let sampleObject = fields[key].length > 1 ? mergeObjects(fields[key]) : fields[key][0];
+    if (Array.isArray(fields[key]) && fields[key].length > 0 && typeof fields[key][0] === 'object') {
+      // Handle lists of objects
       const nestedClassName = toPascalCase(key) + 'Entity';
-
       nestedClasses += `
 class ${nestedClassName} {
-  ${Object.keys(sampleObject)
+  ${Object.keys(fields[key][0])
     .map((nestedKey) => {
-      const fieldType = inferType(sampleObject[nestedKey], toPascalCase(nestedKey) + 'Entity');
+      const fieldType = inferType(fields[key][0][nestedKey], toPascalCase(nestedKey) + 'Entity');
       return `final ${fieldType} ${nestedKey};`;
     })
     .join('\n  ')}
 
   ${nestedClassName}({
-    ${Object.keys(sampleObject)
+    ${Object.keys(fields[key][0])
       .map((nestedKey) => `required this.${nestedKey},`)
       .join('\n    ')}
   });
 
   factory ${nestedClassName}.empty() => ${nestedClassName}(
-    ${Object.keys(sampleObject)
-      .map((nestedKey) => `${nestedKey}: ${getDefaultValue(sampleObject[nestedKey], nestedKey)},`)
+    ${Object.keys(fields[key][0])
+      .map((nestedKey) => `${nestedKey}: ${getDefaultValue(fields[key][0][nestedKey], nestedKey)},`)
       .join('\n    ')}
   );
 
   factory ${nestedClassName}.fromJson(Map<String, dynamic> json) {
     return ${nestedClassName}(
-      ${Object.keys(sampleObject)
+      ${Object.keys(fields[key][0])
         .map((nestedKey) => `${nestedKey}: json['${nestedKey}'],`)
         .join('\n      ')}
     );
   }
 
   Map<String, dynamic> toJson() => {
-    ${Object.keys(sampleObject)
+    ${Object.keys(fields[key][0])
       .map((nestedKey) => `'${nestedKey}': ${nestedKey},`)
       .join('\n    ')}
   };
 }
 `;
-      // Recursively handle nested objects inside the merged object.
-      nestedClasses += generateNestedClasses(sampleObject, nestedClassName);
+      nestedClasses += generateNestedClasses(fields[key][0], nestedClassName);
     } else if (typeof fields[key] === 'object' && fields[key] !== null && !Array.isArray(fields[key])) {
+      // Handle single nested objects
       const nestedClassName = toPascalCase(key) + 'Entity';
       nestedClasses += `
 class ${nestedClassName} {
@@ -372,5 +308,25 @@ class ${nestedClassName} {
   });
 
   return nestedClasses;
+}
+
+function inferType(value: any, parentClassName: string = ''): string {
+  if (typeof value === 'number') {
+    return 'int';
+  } else if (typeof value === 'string') {
+    return 'String';
+  } else if (typeof value === 'boolean') {
+    return 'bool';
+  } else if (Array.isArray(value)) {
+    if (value.length > 0) {
+      const itemType = inferType(value[0], toPascalCase(parentClassName)); // Infer list item type
+      return `List<${itemType}>`;
+    }
+    return `List<dynamic>`; // Default if empty
+  } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return toPascalCase(parentClassName) + 'Entity'; // Properly assign entity class name
+  } else {
+    return 'dynamic';
+  }
 }
 

@@ -298,7 +298,7 @@ class ${nestedClassName} {
   ${Object.keys(sampleObject)
     .map((nestedKey) => {
       const fieldType = inferType(sampleObject[nestedKey], toPascalCase(nestedKey) + 'Entity');
-      return `final ${fieldType} ${nestedKey};`;
+      return `final ${fieldType}? ${nestedKey};`;
     })
     .join('\n  ')}
 
