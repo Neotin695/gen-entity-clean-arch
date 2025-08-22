@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import JSON5 from 'json5';
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
@@ -9,7 +8,7 @@ export function activate(context: vscode.ExtensionContext) {
     async () => {
       try {
         // Prompt for model class name
-        const modelName = await vscode.window.showInputBox({
+        const modelName = await vscode.window.showInputBox({a
           placeHolder: 'Enter the main model class name (e.g., CarEntity)',
         });
         if (!modelName) {
@@ -18,9 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // Remove 'Entity' from class name if it exists
-        const baseClassName = toPascalCase(
-          modelName.endsWith('Entity') ? modelName.slice(0, -6) : modelName
-        );
+        const baseClassName = toPascalCase(modelName.endsWith('Entity') ? modelName.slice(0, -6) : modelName);
         const className = baseClassName + 'Entity';
 
         // Prompt for JSON input
@@ -32,29 +29,11 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        let fields: any;
+        let fields;
         try {
-          const normalized = normalizeInput(jsonInput);
-          fields = JSON5.parse(normalized);
-        } catch (error: any) {
-          vscode.window.showErrorMessage(`Invalid JSON/JSON5. ${error?.message ?? ''}`);
-          return;
-        }
-
-        // handle array root
-        if (Array.isArray(fields)) {
-          if (fields.length === 0) {
-            vscode.window.showErrorMessage('Array is empty. Provide at least one object.');
-            return;
-          }
-          if (fields.every((x) => typeof x === 'object' && x !== null && !Array.isArray(x))) {
-            fields = mergeObjects(fields);
-          } else {
-            vscode.window.showErrorMessage('Root array must contain objects to infer fields.');
-            return;
-          }
-        } else if (typeof fields !== 'object' || fields === null) {
-          vscode.window.showErrorMessage('Root must be an object or an array of objects.');
+          fields = JSON.parse(jsonInput);
+        } catch (error) {
+          vscode.window.showErrorMessage('Invalid JSON format. Please check your input.');
           return;
         }
 
@@ -79,16 +58,17 @@ export function activate(context: vscode.ExtensionContext) {
 
         const entityDir = entityUri[0].fsPath;
         const modelDir = modelUri[0].fsPath;
-
+        
+        // Removed targetDir as it's replaced with entityDir and modelDir
         const formattedName = baseClassName.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
         const entityFileName = `${formattedName}_entity.dart`;
         const modelFileName = `${formattedName}_model.dart`;
         const entityFilePath = path.join(entityDir, entityFileName);
         const modelFilePath = path.join(modelDir, modelFileName);
-
+        
         const entityContent = generateEntityClass(className, formattedName, fields);
         const modelContent = generateModelClass(baseClassName, formattedName, fields);
-
+        
         await fs.promises.writeFile(entityFilePath, entityContent, 'utf-8');
         await fs.promises.writeFile(modelFilePath, modelContent, 'utf-8');
 
@@ -96,38 +76,14 @@ export function activate(context: vscode.ExtensionContext) {
           'Dart entity and model files generated successfully.'
         );
       } catch (error) {
-        vscode.window.showErrorMessage(`Failed to generate Dart models: ${error}`);
+        vscode.window.showErrorMessage(
+          `Failed to generate Dart models: ${error}`
+        );
       }
     }
   );
 
   context.subscriptions.push(disposable);
-}
-
-function normalizeInput(input: string): string {
-  let s = input.replace(/^\uFEFF/, '').trim();
-
-  const first = Math.min(...[s.indexOf('{'), s.indexOf('[')].filter((i) => i >= 0));
-  const lastBrace = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
-  if (first >= 0 && lastBrace > first) {
-    s = s.slice(first, lastBrace + 1).trim();
-  }
-
-  if (s.startsWith('{') || s.startsWith('[')) return s;
-
-  if (/^"[^"]+"\s*:/.test(s) || /^[A-Za-z0-9_$\-]+\s*:/.test(s)) {
-    return `{${s}}`;
-  }
-
-  const lines = s.split(/[\r\n]+/).filter((l) => l.trim().length > 0);
-  if (lines.length > 1) {
-    const body = lines
-      .map((l) => l.replace(/^\s*([A-Za-z0-9_$\-]+)\s*:/, '"$1":'))
-      .join(',');
-    return `{${body}}`;
-  }
-
-  return s;
 }
 
 function generateEntityClass(className: string, formattedName: string, fields: any): string {
@@ -136,10 +92,7 @@ function generateEntityClass(className: string, formattedName: string, fields: a
   let entityFields = Object.keys(fields)
     .map((key, index) => {
       const fieldType = inferType(fields[key], toPascalCase(key));
-      const jsonKeyAnnotation =
-        typeof fields[key] === 'object' && fields[key] !== null
-          ? `  @JsonKey(fromJson: ${key}FromMap, toJson: ${key}ToMap)\n  `
-          : '';
+      const jsonKeyAnnotation = typeof fields[key] === 'object' && fields[key] !== null ? `  @JsonKey(fromJson: ${key}FromMap, toJson: ${key}ToMap)\n  ` : '';
       return `  @HiveField(${index})\n  ${jsonKeyAnnotation}final ${fieldType} ${key};`;
     })
     .join('\n\n');
@@ -154,6 +107,7 @@ import '../models/${formattedName}_model.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:auto_mappr_annotation/auto_mappr_annotation.dart';
+import '../models/${formattedName}_model.dart';
 
 part '${formattedName}_entity.g.dart';
 
@@ -171,14 +125,14 @@ ${constructorParams}
   factory ${className}.fromModel(${className.replace('Entity', 'Model')} model) =>
       const \$${className}().convert<${className.replace('Entity', 'Model')}, ${className}>(model);
 
+
   factory ${className}.empty() => ${className}(
-    ${Object.keys(fields)
-      .map((key) => `${key}: ${getDefaultValue(fields[key], key)},`)
-      .join('\n')}
+    ${Object.keys(fields).map((key) => `${key}: ${getDefaultValue(fields[key], key)},`).join('\n')}
   );
   ${serializationMethods}
 }
   
+
 ${nestedClasses}
 `;
 }
@@ -199,13 +153,20 @@ function getDefaultValue(value: any, key: string = ''): string {
   }
 }
 
+
 function generateModelClass(baseClassName: string, formattedName: string, fields: any): string {
   let constructorParams = Object.keys(fields)
     .map((key) => `    required super.${key},`)
     .join('\n');
 
+  let toMapBody = Object.keys(fields)
+    .map((key) => `      '${key}': ${key},`)
+    .join('\n');
+
   return `import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../entities/${formattedName}_entity.dart';
+import '../../entities/${formattedName}_entity.dart';
+
 
 part '${formattedName}_model.g.dart';
 
@@ -227,16 +188,15 @@ function toPascalCase(str: string): string {
   return str.replace(/(?:^|_)([a-z])/g, (_, letter) => letter.toUpperCase());
 }
 
+
+
 function generateSerializationMethods(fields: any): string {
   let methods = Object.keys(fields)
-    .filter(
-      (key) =>
-        Array.isArray(fields[key]) || (typeof fields[key] === 'object' && fields[key] !== null)
-    )
-    .map((key) => {
-      if (Array.isArray(fields[key])) {
-        const itemType = inferType(fields[key][0], toPascalCase(key));
-        return `
+  .filter((key) => Array.isArray(fields[key]) || (typeof fields[key] === 'object' && fields[key] !== null))
+  .map((key) => {
+    if (Array.isArray(fields[key])) {
+      const itemType = inferType(fields[key][0], toPascalCase(key));
+      return `
       static List<${itemType}> ${key}FromMap(List<dynamic> json) {
     return json.map((e) => ${itemType}.fromJson(e)).toList();
   }
@@ -261,17 +221,19 @@ function generateSerializationMethods(fields: any): string {
 
   return methods.length > 0 ? methods : '';
 }
-
+// Helper function to merge multiple objects into one with the union of all keys.
 function mergeObjects(arr: any[]): any {
   return arr.reduce((acc, obj) => {
     if (typeof obj === 'object' && obj !== null) {
-      Object.keys(obj).forEach((key) => {
+      Object.keys(obj).forEach(key => {
         if (!(key in acc)) {
           acc[key] = obj[key];
         } else {
+          // If types differ, you might want to default to a safe value or leave it as-is.
           const currentType = inferType(acc[key], toPascalCase(key));
           const newType = inferType(obj[key], toPascalCase(key));
           if (currentType !== newType) {
+            // You can opt to mark it as dynamic or null.
             acc[key] = null;
           }
         }
@@ -282,35 +244,37 @@ function mergeObjects(arr: any[]): any {
 }
 
 function inferListType(arr: any[], parentClassName: string): string {
-  const types = arr.map((item) => inferType(item, parentClassName));
-  if (types.every((t) => t === types[0])) {
+  // Map each item to its inferred type.
+  const types = arr.map(item => inferType(item, parentClassName));
+  if (types.every(t => t === types[0])) {
     return types[0];
   } else {
+    // Fallback to dynamic for heterogeneous types.
     return 'dynamic';
   }
 }
 
 function inferType(value: any, parentClassName: string = ''): string {
   if (typeof value === 'number') {
-    return Number.isInteger(value) ? 'int' : 'double';
+    return 'int';
   } else if (typeof value === 'string') {
     return 'String';
   } else if (typeof value === 'boolean') {
     return 'bool';
   } else if (Array.isArray(value)) {
     if (value.length > 0) {
+      // If array items are objects, merge them to infer a common type.
       if (typeof value[0] === 'object' && value[0] !== null) {
+        // The nested class name will be based on the parentClassName.
         return `List<${toPascalCase(parentClassName)}Entity>`;
       } else {
         const itemType = inferListType(value, toPascalCase(parentClassName));
         return `List<${itemType}>`;
       }
     }
-    return 'List<dynamic>';
+    return `List<dynamic>`;
   } else if (typeof value === 'object' && value !== null) {
     return toPascalCase(parentClassName) + 'Entity';
-  } else if (value === null) {
-    return 'dynamic';
   } else {
     return 'dynamic';
   }
@@ -325,18 +289,15 @@ function generateNestedClasses(fields: any, parentClassName: string): string {
       fields[key].length > 0 &&
       typeof fields[key][0] === 'object'
     ) {
-      let sampleObject =
-        fields[key].length > 1 ? mergeObjects(fields[key]) : fields[key][0];
+      // For arrays of objects, merge all items to handle heterogeneous keys.
+      let sampleObject = fields[key].length > 1 ? mergeObjects(fields[key]) : fields[key][0];
       const nestedClassName = toPascalCase(key) + 'Entity';
 
       nestedClasses += `
 class ${nestedClassName} {
   ${Object.keys(sampleObject)
     .map((nestedKey) => {
-      const fieldType = inferType(
-        sampleObject[nestedKey],
-        toPascalCase(nestedKey) + 'Entity'
-      );
+      const fieldType = inferType(sampleObject[nestedKey], toPascalCase(nestedKey) + 'Entity');
       return `final ${fieldType} ${nestedKey};`;
     })
     .join('\n  ')}
@@ -349,10 +310,7 @@ class ${nestedClassName} {
 
   factory ${nestedClassName}.empty() => ${nestedClassName}(
     ${Object.keys(sampleObject)
-      .map(
-        (nestedKey) =>
-          `${nestedKey}: ${getDefaultValue(sampleObject[nestedKey], nestedKey)},`
-      )
+      .map((nestedKey) => `${nestedKey}: ${getDefaultValue(sampleObject[nestedKey], nestedKey)},`)
       .join('\n    ')}
   );
 
@@ -371,37 +329,26 @@ class ${nestedClassName} {
   };
 }
 `;
+      // Recursively handle nested objects inside the merged object.
       nestedClasses += generateNestedClasses(sampleObject, nestedClassName);
-    } else if (
-      typeof fields[key] === 'object' &&
-      fields[key] !== null &&
-      !Array.isArray(fields[key])
-    ) {
+    } else if (typeof fields[key] === 'object' && fields[key] !== null && !Array.isArray(fields[key])) {
       const nestedClassName = toPascalCase(key) + 'Entity';
       nestedClasses += `
 class ${nestedClassName} {
   ${Object.keys(fields[key])
     .map((nestedKey) => {
-      const fieldType = inferType(
-        fields[key][nestedKey],
-        toPascalCase(nestedKey) + 'Entity'
-      );
+      const fieldType = inferType(fields[key][nestedKey], toPascalCase(nestedKey) + 'Entity');
       return `final ${fieldType} ${nestedKey};`;
     })
     .join('\n  ')}
 
   ${nestedClassName}({
-    ${Object.keys(fields[key])
-      .map((nestedKey) => `required this.${nestedKey},`)
-      .join('\n    ')}
+    ${Object.keys(fields[key]).map((nestedKey) => `required this.${nestedKey},`).join('\n    ')}
   });
 
   factory ${nestedClassName}.empty() => ${nestedClassName}(
     ${Object.keys(fields[key])
-      .map(
-        (nestedKey) =>
-          `${nestedKey}: ${getDefaultValue(fields[key][nestedKey], nestedKey)},`
-      )
+      .map((nestedKey) => `${nestedKey}: ${getDefaultValue(fields[key][nestedKey], nestedKey)},`)
       .join('\n    ')}
   );
 
@@ -426,3 +373,4 @@ class ${nestedClassName} {
 
   return nestedClasses;
 }
+
