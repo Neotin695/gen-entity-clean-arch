@@ -317,7 +317,7 @@ ${copyParams}
 /* ================= Codegen: Mappers (Extensions) ================= */
 
 function generateMapperFile(base: string, formatted: string): string {
-  return `import '../domain/entities/${formatted}_entity.dart';
+  return `import '..//entities/${formatted}_entity.dart';
 import '../models/${formatted}_model.dart';
 
 extension ${base}EntityToModelX on ${base}Entity {

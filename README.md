@@ -1,157 +1,258 @@
-Here's a **README.md** file for the VS Code extension that generates Dart entities and models using **Clean Architecture**:
+# Gen Entity Clean Arch — VS Code Extension
 
-```markdown
-# 📌 Gen Entity Clean Arch
+**Gen Entity Clean Arch** هي إضافة لـ **VS Code** تولِّد لك ملفات **Entities** و **Models** (وفق نمط Clean Architecture) مباشرةً من **JSON**، مع دعم قاعدة البيانات **Isar** بدل Hive، وإضافة ملف **Mappers** للتحويل بين الكيانات والموديلات (toModel / fromModel) — بدون أي حِزم Mapping إضافية.
 
-**Gen Entity Clean Arch** is a VS Code extension designed to help developers generate **Entities** and **Models** following the principles of **Clean Architecture** in **Flutter**.
-
----
-
-## 🚀 **Installation**
-
-### **1️⃣ Install the Extension**
-You can install the extension directly from the **VS Code Marketplace** by searching for:
-```sh
-Gen Entity Clean Arch
-```
-Or you can manually install it using `vsce`:
-```sh
-code --install-extension gen-entity-clean-arch
-```
+> ✅ الإضافة تولِّد ثلاثة ملفات لكل كيان:  
+> 1) `*_entity.dart` (Isar @collection + @embedded)  
+> 2) `*_model.dart` (يرث من الـ Entity ويحتوي fromMap/toMap)  
+> 3) `*_mappers.dart` (Extensions: toModel / toEntity + تحويل القوائم)
 
 ---
 
-## 🛠 **How to Use**
+## ✨ المزايا
 
-### **1️⃣ Generate a New Entity**
-1. Open **VS Code** within your **Flutter** project.
-2. Right-click on the `lib/domain/entities/` folder.
-3. Choose **Generate Entity**.
-4. Enter the name for the **Entity** (e.g., `CarEntity`).
-5. The extension will automatically generate a new **Entity** with appropriate fields based on the entered **JSON** structure.
+- إدخال **JSON/JSON5** حرّ (تلقّي نص أو سطور مفتاحية) — مع Normalization ذكي.
+- توليد **Isar Entities** بعلامات: `@collection` للكيان الأساسي، و`@embedded` للمتداخلة.
+- توليد **Model** يرث من **Entity** (ويورِّث الأساليب) — مناسب لمشروعات **Clean Architecture** التي تفضّل الوراثة.
+- توليد **Mappers** كـ **Extensions**:  
+  - `Entity.toModel()`، `Model.toEntity()`، وتحويل القوائم.
+- دعم القوائم المتداخلة والكائنات المتداخلة.
+- حقول **Nullable** افتراضيًا (مرونة أعلى مع JSON غير مكتمل).
+- لا يعتمد على Freezed/Json Serializable/Hive/AutoMapper.
 
-### **2️⃣ Install dependces **
-```pubspec
+---
 
+## 🧰 المتطلبات
+
+- **Flutter** (Dart 3+).
+- في مشروع Flutter: إعداد **Isar** و Codegen.
+
+أضف إلى `pubspec.yaml` في مشروعك:
+
+```yaml
 dependencies:
-  flutter:
-    sdk: flutter
-  equatable: ^2.0.5
-  json_annotation: ^4.9.0
-  freezed_annotation: ^2.4.4
-  auto_mappr_annotation: ^1.2.0
-  hive_flutter: ^1.1.0
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  path_provider: ^2.1.4
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-
-
-  build_runner: ^2.4.13
-  auto_route_generator: ^9.0.0
-  json_serializable: ^6.8.0
-  build_test: ^2.2.2
-  build_web_compilers: ^4.0.11
-  freezed: ^2.5.7
-  auto_mappr: ^1.7.0
-  hive_generator: ^2.0.1
-
-
+  build_runner: ^2.4.11
+  isar_generator: ^3.1.0+1
 ```
 
-### **2️⃣ Generate a New Model**
-1. Navigate to the `lib/data/models/` folder.
-2. Right-click the folder and choose **Generate Model**.
-3. Enter the name for the **Model** (e.g., `CarModel`).
-4. The extension will automatically generate a new **Model** with `fromJson()` and `toJson()` methods.
+بعد توليد الملفات، شغّل:
+
+```bash
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+> **مهم:** كل ملف Entity يحتوي `part '<name>_entity.g.dart';` ويجب تشغيل الـcodegen بعد الإنشاء.
 
 ---
 
-## 📌 **How It Works**
+## 🧩 التثبيت
 
-### **1. Entering the Model Name**
-You will be prompted to enter the **Model class name** (e.g., `CarEntity`). If the name includes `Entity`, it will be removed automatically, and the extension will append it again to ensure the correct naming convention.
-
-### **2. Providing the JSON Structure**
-The extension will ask you for the **JSON structure** for the model fields. The fields will be used to generate the Entity and Model with the correct types and annotations.
-
-### **3. Choosing the Save Location**
-Afterward, you will be prompted to choose the directory where you want to save the **Entity** and **Model** files.
+- من داخل VS Code: `Ctrl/Cmd + Shift + P` → **Extensions: Install from VSIX** (لو عندك ملف VSIX)  
+  أو ابحث عن **gen entity clean arch** في Marketplace إن كان منشورًا.
+- بعد التثبيت، أعد تشغيل VS Code (إن لزم).
 
 ---
 
-## 📌 **Example Output**
+## 🚀 كيف تستخدمها
 
-After running the extension, you will get an **Entity** like this:
+1. افتح مشروع Flutter.
+2. من **Command Palette** (`Ctrl/Cmd + Shift + P`) اكتب: **gen entity clean arch** ثم اختر الأمر.
+3. أدخل **اسم الكلاس** (مثال: `BuildingEntity` أو `Building`). سيُحسب الاسم الأساسي تلقائيًا.
+4. ألصق **JSON** الخاص بالحقل/الكيان (تُقبل JSON/JSON5 أو سطور `key: value`).
+5. اختر مجلد حفظ **Entities** ثم مجلد حفظ **Models**.
+6. ستحصل على:  
+   - `building_entity.dart`  
+   - `building_model.dart`  
+   - `building_mappers.dart`
+7. شغّل الـ codegen لمشروعك (انظر قسم المتطلبات).
 
+---
+
+## 📝 قواعد إدخال JSON
+
+- مقبول: **Object** أو **Array of Objects** (سيتم دمج الحقول تلقائيًا عند الجذر).
+- القيم البدائية تتحول لأنواع Dart (`int/double/String/bool`).  
+- القوائم:  
+  - `List<T>` للبدائيات أو `List<SomeEntity>` للأجسام المتداخلة.  
+- الكائنات المتداخلة تتحول إلى **@embedded** Entities.
+- جميع الحقول **Nullable** بشكل افتراضي (تستوعب الـ JSON الناقص).
+- إن تعارضت أنواع نفس المفتاح في مدخلات مختلفة، سيُضبط إلى `dynamic` (أو nullable).
+
+> مثال إدخال سريع:
+```json
+{
+  "title": "عمارة الضياء",
+  "rating": 4.5,
+  "owner": {"ownerId": 7, "name": "Ali"},
+  "tags": ["near_haram","family"],
+  "units": [{"beds": 3, "monthlyPrice": 2200.0}]
+}
+```
+
+---
+
+## 📦 ماذا يتم توليده؟
+
+### 1) الكيان — `building_entity.dart`
 ```dart
-@HiveType(typeId: 62)
-@AutoMappr([
-  MapType<SponsorsModel, SponsorsEntity>(),
-])
-class SponsorsEntity extends $SponsorsEntity {
-  @HiveField(0)
-  final String uuid;
+import 'package:isar/isar.dart';
 
-  @HiveField(1)
-  final String image;
+part 'building_entity.g.dart';
 
-  @HiveField(2)
-  final String end_date;
+@collection
+class BuildingEntity {
+  Id id = Isar.autoIncrement;
 
-  SponsorsEntity({
-    required this.uuid,
-    required this.image,
-    required this.end_date,
+  String? title;
+  double? rating;
+  OwnerEntity? owner;
+  List<String>? tags;
+  List<UnitEntity>? units;
+
+  BuildingEntity({
+    this.title,
+    this.rating,
+    this.owner,
+    this.tags,
+    this.units,
   });
 
-  factory SponsorsEntity.fromModel(SponsorsModel model) =>
-      const $SponsorsEntity().convert<SponsorsModel, SponsorsEntity>(model);
+  factory BuildingEntity.fromMap(Map<String, dynamic> json) => BuildingEntity(
+        title: json['title'] as String?,
+        rating: (json['rating'] as num?)?.toDouble(),
+        owner: (json['owner'] != null
+            ? OwnerEntity.fromMap(Map<String, dynamic>.from(json['owner'] as Map))
+            : null),
+        tags: (json['tags'] as List?)?.map((e) => e).toList(),
+        units: (json['units'] as List?)
+            ?.map((e) => UnitEntity.fromMap(Map<String, dynamic>.from(e as Map)))
+            .toList(),
+      );
 
-  factory SponsorsEntity.empty() =>
-      SponsorsEntity(uuid: '', image: '', end_date: '');
+  Map<String, dynamic> toMap() => {
+        'title': title,
+        'rating': rating,
+        'owner': owner?.toMap(),
+        'tags': tags,
+        'units': units?.map((e) => e.toMap()).toList(),
+      };
+
+  factory BuildingEntity.empty() => BuildingEntity(
+        title: '',
+        rating: 0,
+        owner: OwnerEntity(),
+        tags: const [],
+        units: const [],
+      );
+}
+
+@embedded
+class OwnerEntity {
+  int? ownerId;
+  String? name;
+
+  OwnerEntity({this.ownerId, this.name});
+
+  factory OwnerEntity.fromMap(Map<String, dynamic> json) => OwnerEntity(
+        ownerId: (json['ownerId'] as num?)?.toInt(),
+        name: json['name'] as String?,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'ownerId': ownerId,
+        'name': name,
+      };
+}
+
+@embedded
+class UnitEntity {
+  int? beds;
+  double? monthlyPrice;
+
+  UnitEntity({this.beds, this.monthlyPrice});
+
+  factory UnitEntity.fromMap(Map<String, dynamic> json) => UnitEntity(
+        beds: (json['beds'] as num?)?.toInt(),
+        monthlyPrice: (json['monthlyPrice'] as num?)?.toDouble(),
+      );
+
+  Map<String, dynamic> toMap() => {
+    'beds': beds,
+    'monthlyPrice': monthlyPrice,
+  };
 }
 ```
 
-And a corresponding **Model** like this:
-
+### 2) الموديل — `building_model.dart` (يرث من الـ Entity)
 ```dart
-part 'sponsors_model.g.dart';
+import '../../entities/building_entity.dart';
 
-@JsonSerializable()
-class SponsorsModel extends SponsorsEntity {
-  SponsorsModel(
-      {required super.uuid, required super.image, required super.end_date});
+class BuildingModel extends BuildingEntity {
+  BuildingModel({
+    required super.title,
+    required super.rating,
+    required super.owner,
+    required super.tags,
+    required super.units,
+  });
 
-  factory SponsorsModel.fromJson(Map<String, dynamic> json) =>
-      _$SponsorsModelFromJson(json);
+  factory BuildingModel.fromMap(Map<String, dynamic> json) {
+    final e = BuildingEntity.fromMap(json);
+    return BuildingModel(
+      title: e.title,
+      rating: e.rating,
+      owner: e.owner,
+      tags: e.tags,
+      units: e.units,
+    );
+  }
 
-  Map<String, dynamic> toMap() => _$SponsorsModelToJson(this);
+  @override
+  Map<String, dynamic> toMap() => super.toMap();
+
+  BuildingEntity toEntity() => BuildingEntity.fromMap(toMap());
+
+  static BuildingModel fromEntity(BuildingEntity e) => BuildingModel.fromMap(e.toMap());
+}
+```
+
+### 3) المابرز — `building_mappers.dart`
+```dart
+import '../entities/building_entity.dart';
+import '../models/building_model.dart';
+
+extension BuildingEntityToModelX on BuildingEntity {
+  BuildingModel toModel() => BuildingModel.fromMap(toMap());
 }
 
+extension BuildingModelToEntityX on BuildingModel {
+  BuildingEntity toEntity() => BuildingEntity.fromMap(toMap());
+}
+
+extension BuildingEntityListMapX on List<BuildingEntity> {
+  List<BuildingModel> toModels() => map((e) => e.toModel()).toList();
+}
+
+extension BuildingModelListMapX on List<BuildingModel> {
+  List<BuildingEntity> toEntities() => map((e) => e.toEntity()).toList();
+}
 ```
 
 ---
 
-## 🔥 **Benefits**
-- ✅ **Saves time** by automatically generating code.
-- ✅ **Compliant with Clean Architecture** principles.
-- ✅ **Reduces coding errors** and ensures consistent code structure.
+## 🛠️ Troubleshooting
+
+- **`part '*.g.dart'` مفقود**: شغّل `build_runner` بعد التوليد.
+- **أخطاء JSON**: استخدم JSON صحيح أو JSON5؛ الإضافة تقوم بعمل Normalize تلقائي.
+- **Imports متداخلة**: حافظ على اتجاه الاستيراد (Model يستورد Entity فقط).
 
 ---
 
-## 💡 **Contributing & Development**
-- You can contribute to improving the extension by submitting a PR on our GitHub repository.
-- Have suggestions or issues? Open an `Issue` on GitHub!
+## 📄 License
 
----
-
-## ⚖️ **License**
-This extension is licensed under the **MIT License**, meaning you can freely use it in your projects.
-
----
-
-🚀 **Start now and make your development process faster and more organized!**
-```
-
-This README file provides a detailed explanation of how to install and use the extension, along with benefits and an example of the generated code. If you need any further adjustments, feel free to ask!
+MIT (أو ضع الترخيص الذي تفضّله).

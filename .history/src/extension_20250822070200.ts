@@ -181,7 +181,7 @@ part '${formattedName}_entity.g.dart';
 
 @collection
 class ${className} {
-  Id identification = Isar.autoIncrement;
+  Id Identification = Isar.autoIncrement;
 
 ${entityFields}
 
@@ -285,7 +285,7 @@ function generateModelClass(baseClassName: string, formattedName: string, fields
     .map((key) => `      ${key}: e.${key},`)
     .join('\n');
 
-  return `import '../../domain/entities/${formattedName}_entity.dart';
+  return `import '../../entities/${formattedName}_entity.dart';
 
 class ${baseClassName}Model extends ${baseClassName}Entity {
   ${baseClassName}Model({
@@ -317,7 +317,7 @@ ${copyParams}
 /* ================= Codegen: Mappers (Extensions) ================= */
 
 function generateMapperFile(base: string, formatted: string): string {
-  return `import '../domain/entities/${formatted}_entity.dart';
+  return `import '../entities/${formatted}_entity.dart';
 import '../models/${formatted}_model.dart';
 
 extension ${base}EntityToModelX on ${base}Entity {
