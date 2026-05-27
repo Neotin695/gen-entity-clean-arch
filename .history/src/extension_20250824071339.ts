@@ -239,7 +239,7 @@ function generateEntity(opts: GenEntityOpts): string {
   const { className, formattedName, fields, storageKind, useNullable, hiveTypeIdRef } = opts;
 
   const keys = Object.keys(fields);
-  const entiftyFields = keys
+  const entityFields = keys
     .map((key, idx) => fieldLine(key, fields[key], toPascalCase(key), useNullable, storageKind, idx))
     .join('\n');
 
@@ -342,7 +342,7 @@ ${embedded}
     return `
 ${header}
 
-const class ${className} extends Equatable {
+class ${className} extends Equatable {
 ${entityFields}
 
   ${className}({
@@ -385,7 +385,7 @@ function fieldLine(
   if (storageKind === 'hive') {
     return `  @HiveField(${indexForHive})\n  ${type} ${key};`;
   }
-  return `final  ${type} ${key};`;
+  return `  ${type} ${key};`;
 }
 
 function generateEmbeddedClasses(
