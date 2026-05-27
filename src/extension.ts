@@ -239,7 +239,7 @@ function generateEntity(opts: GenEntityOpts): string {
   const { className, formattedName, fields, storageKind, useNullable, hiveTypeIdRef } = opts;
 
   const keys = Object.keys(fields);
-  const entiftyFields = keys
+  const entityFields = keys
     .map((key, idx) => fieldLine(key, fields[key], toPascalCase(key), useNullable, storageKind, idx))
     .join('\n');
 
@@ -342,10 +342,10 @@ ${embedded}
     return `
 ${header}
 
-const class ${className} extends Equatable {
+ class ${className} extends Equatable {
 ${entityFields}
 
-  ${className}({
+  const ${className}({
 ${ctorParams}
   });
 
@@ -532,7 +532,7 @@ ${copyParams}
 /* ================= Codegen: Mappers (Extensions) ================= */
 
 function generateMapperFile(base: string, formatted: string): string {
-  return `import '../domain/entities/${formatted}_entity.dart';
+  return `import '../../domain/entities/${formatted}_entity.dart';
 import '../models/${formatted}_model.dart';
 
 extension ${base}EntityToModelX on ${base}Entity {

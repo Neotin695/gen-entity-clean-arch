@@ -342,10 +342,10 @@ ${embedded}
     return `
 ${header}
 
-class ${className} extends Equatable {
+ class ${className} extends Equatable {
 ${entityFields}
 
-  ${className}({
+  const ${className}({
 ${ctorParams}
   });
 
@@ -385,7 +385,7 @@ function fieldLine(
   if (storageKind === 'hive') {
     return `  @HiveField(${indexForHive})\n  ${type} ${key};`;
   }
-  return `  ${type} ${key};`;
+  return `final  ${type} ${key};`;
 }
 
 function generateEmbeddedClasses(
@@ -532,7 +532,7 @@ ${copyParams}
 /* ================= Codegen: Mappers (Extensions) ================= */
 
 function generateMapperFile(base: string, formatted: string): string {
-  return `import '../domain/entities/${formatted}_entity.dart';
+  return `import '../../domain/entities/${formatted}_entity.dart';
 import '../models/${formatted}_model.dart';
 
 extension ${base}EntityToModelX on ${base}Entity {

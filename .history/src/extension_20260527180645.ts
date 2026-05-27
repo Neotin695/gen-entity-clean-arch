@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import JSON5 from 'json5';
 
+type StorageKind = 'none' | 'isar' | 'hive';
+
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
     'gen-entity-clean-arch.helloWorld',
@@ -24,12 +26,22 @@ export function activate(context: vscode.ExtensionContext) {
         const entityClass = baseClassName + 'Entity';
         const modelClass = baseClassName + 'Model';
 
-        // 2) اختيارات: تخزين محلي + Nullable
-        const localPick = await vscode.window.showQuickPick(['Yes', 'No'], {
-          placeHolder: 'Support local storage (Isar)?',
+        // 2) اختيارات التخزين المحلي + Nullable
+        const storagePick = await vscode.window.showQuickPick(['None', 'Isar', 'Hive'], {
+          placeHolder: 'Local storage support?',
         });
-        if (!localPick) return;
-        const withLocalStorage = localPick === 'Yes';
+        if (!storagePick) return;
+        const storageKind = storagePick.toLowerCase() as StorageKind;
+
+        let hiveBaseTypeId = 0;
+        if (storageKind === 'hive') {
+          const typeIdStr = await vscode.window.showInputBox({
+            placeHolder: 'Base Hive typeId (e.g., 100) — will auto-increment for nested classes',
+            validateInput: (v) => (/^\d+$/.test(v) ? undefined : 'Enter a number (e.g., 100)'),
+          });
+          if (!typeIdStr) return;
+          hiveBaseTypeId = parseInt(typeIdStr, 10);
+        }
 
         const nullPick = await vscode.window.showQuickPick(
           ['Nullable fields', 'Non-nullable fields'],
@@ -103,12 +115,15 @@ export function activate(context: vscode.ExtensionContext) {
         const mappersFilePath = path.join(modelDir, mappersFileName);
 
         // 6) توليد الملفات
+        const hiveTypeIdRef = { current: hiveBaseTypeId };
+
         const entityContent = generateEntity({
           className: entityClass,
           formattedName,
           fields,
-          withLocalStorage,
+          storageKind,
           useNullable,
+          hiveTypeIdRef,
         });
 
         const modelContent = generateModelClass({
@@ -128,9 +143,13 @@ export function activate(context: vscode.ExtensionContext) {
           `Generated: ${entityFileName}, ${modelFileName}, ${mappersFileName}`
         );
 
-        if (withLocalStorage) {
+        if (storageKind === 'isar') {
           vscode.window.showInformationMessage(
-            'Local storage enabled (Isar). Run build_runner to generate *.g.dart.'
+            'Isar enabled. Run build_runner to generate *.g.dart.'
+          );
+        } else if (storageKind === 'hive') {
+          vscode.window.showInformationMessage(
+            'Hive enabled. Add hive/hive_flutter + hive_generator (dev) then run build_runner.'
           );
         }
       } catch (error) {
@@ -205,49 +224,62 @@ function mergeObjects(arr: any[]): any {
   }, {} as any);
 }
 
-/* ================= Codegen: Entity (Isar OR Plain) ================= */
+/* ================= Codegen: Entity (Isar | Hive | Plain) ================= */
 
 type GenEntityOpts = {
   className: string;
   formattedName: string;
   fields: any;
-  withLocalStorage: boolean;
+  storageKind: StorageKind;
   useNullable: boolean;
+  hiveTypeIdRef?: { current: number };
 };
 
 function generateEntity(opts: GenEntityOpts): string {
-  const { className, formattedName, fields, withLocalStorage, useNullable } = opts;
+  const { className, formattedName, fields, storageKind, useNullable, hiveTypeIdRef } = opts;
 
-  const entityFields = Object.keys(fields)
-    .map((key) => `  ${inferType(fields[key], toPascalCase(key), useNullable)} ${key};`)
+  const keys = Object.keys(fields);
+  const entityFields = keys
+    .map((key, idx) => fieldLine(key, fields[key], toPascalCase(key), useNullable, storageKind, idx))
     .join('\n');
 
-  const ctorParams = Object.keys(fields)
+  const ctorParams = keys
     .map((key) => `    ${useNullable ? '' : 'required '}this.${key},`)
     .join('\n');
 
-  const fromMapBody = Object.keys(fields)
+  const fromMapBody = keys
     .map((key) => `      ${key}: ${fromMapExpr(key, fields[key], toPascalCase(key), useNullable)},`)
     .join('\n');
 
-  const toMapBody = Object.keys(fields)
+  const toMapBody = keys
     .map((key) => `      '${key}': ${toMapExpr(key, fields[key], toPascalCase(key))},`)
     .join('\n');
 
-  const emptyBody = Object.keys(fields)
+  const emptyBody = keys
     .map((key) => `      ${key}: ${getDefaultValue(fields[key], key, useNullable)},`)
     .join('\n');
 
-  const embedded = generateEmbeddedClasses(fields, withLocalStorage, useNullable);
+  const propsList = [
+    ...(storageKind === 'isar' ? ['identification'] : []),
+    ...keys,
+  ].join(', ');
 
-  if (withLocalStorage) {
+  const embedded = generateEmbeddedClasses(fields, storageKind, useNullable, hiveTypeIdRef);
+
+  // imports + parts
+  let header = `import 'package:equatable/equatable.dart';\n`;
+  if (storageKind === 'isar') {
+    header += `import 'package:isar/isar.dart';\n\npart '${formattedName}_entity.g.dart';\n`;
+  } else if (storageKind === 'hive') {
+    header += `import 'package:hive/hive.dart';\n\npart '${formattedName}_entity.g.dart';\n`;
+  }
+
+  if (storageKind === 'isar') {
     return `
-import 'package:isar/isar.dart';
-
-part '${formattedName}_entity.g.dart';
+${header}
 
 @collection
-class ${className} {
+class ${className} extends Equatable {
   Id identification = Isar.autoIncrement;
 
 ${entityFields}
@@ -267,13 +299,20 @@ ${toMapBody}
   factory ${className}.empty() => ${className}(
 ${emptyBody}
   );
+
+  @override
+  List<Object?> get props => [${propsList}];
 }
 
 ${embedded}
 `;
-  } else {
+  } else if (storageKind === 'hive') {
+    const typeId = hiveTypeIdRef ? hiveTypeIdRef.current++ : 0;
     return `
-class ${className} {
+${header}
+
+@HiveType(typeId: ${typeId})
+class ${className} extends Equatable {
 ${entityFields}
 
   ${className}({
@@ -291,6 +330,39 @@ ${toMapBody}
   factory ${className}.empty() => ${className}(
 ${emptyBody}
   );
+
+  @override
+  List<Object?> get props => [${propsList}];
+}
+
+${embedded}
+`;
+  } else {
+    // none
+    return `
+${header}
+
+ class ${className} extends Equatable {
+${entityFields}
+
+  const ${className}({
+${ctorParams}
+  });
+
+  factory ${className}.fromMap(Map<String, dynamic> json) => ${className}(
+${fromMapBody}
+  );
+
+  Map<String, dynamic> toMap() => {
+${toMapBody}
+  };
+
+  factory ${className}.empty() => ${className}(
+${emptyBody}
+  );
+
+  @override
+  List<Object?> get props => [${propsList}];
 }
 
 ${embedded}
@@ -298,10 +370,29 @@ ${embedded}
   }
 }
 
+function fieldLine(
+  key: string,
+  value: any,
+  parentClassName: string,
+  useNullable: boolean,
+  storageKind: StorageKind,
+  indexForHive: number
+): string {
+  const type = inferType(value, parentClassName, useNullable);
+  if (storageKind === 'isar') {
+    return `  ${type} ${key};`;
+  }
+  if (storageKind === 'hive') {
+    return `  @HiveField(${indexForHive})\n  ${type} ${key};`;
+  }
+  return `final  ${type} ${key};`;
+}
+
 function generateEmbeddedClasses(
   obj: any,
-  withLocalStorage: boolean,
-  useNullable: boolean
+  storageKind: StorageKind,
+  useNullable: boolean,
+  hiveTypeIdRef?: { current: number }
 ): string {
   let out = '';
   for (const key of Object.keys(obj)) {
@@ -311,15 +402,15 @@ function generateEmbeddedClasses(
     if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && val[0] !== null) {
       const sample = val.length > 1 ? mergeObjects(val) : val[0];
       const cls = toPascalCase(key) + 'Entity';
-      out += embeddedClass(cls, sample, withLocalStorage, useNullable);
-      out += generateEmbeddedClasses(sample, withLocalStorage, useNullable);
+      out += embeddedClass(cls, sample, storageKind, useNullable, hiveTypeIdRef);
+      out += generateEmbeddedClasses(sample, storageKind, useNullable, hiveTypeIdRef);
     }
 
     // nested obj
     if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
       const cls = toPascalCase(key) + 'Entity';
-      out += embeddedClass(cls, val, withLocalStorage, useNullable);
-      out += generateEmbeddedClasses(val, withLocalStorage, useNullable);
+      out += embeddedClass(cls, val, storageKind, useNullable, hiveTypeIdRef);
+      out += generateEmbeddedClasses(val, storageKind, useNullable, hiveTypeIdRef);
     }
   }
   return out;
@@ -328,36 +419,43 @@ function generateEmbeddedClasses(
 function embeddedClass(
   className: string,
   sample: any,
-  withLocalStorage: boolean,
-  useNullable: boolean
+  storageKind: StorageKind,
+  useNullable: boolean,
+  hiveTypeIdRef?: { current: number }
 ): string {
-  const fieldsStr = Object.keys(sample)
-    .map((k) => `  ${inferType(sample[k], toPascalCase(k), useNullable)} ${k};`)
+  const keys = Object.keys(sample);
+
+  const fieldsStr = keys
+    .map((k, idx) => fieldLine(k, sample[k], toPascalCase(k), useNullable, storageKind, idx))
     .join('\n');
 
-  const ctor = Object.keys(sample)
+  const ctor = keys
     .map((k) => `    ${useNullable ? '' : 'required '}this.${k},`)
     .join('\n');
 
-  const fromMapBody = Object.keys(sample)
+  const fromMapBody = keys
     .map(
       (k) =>
         `      ${k}: ${fromMapExpr(k, sample[k], toPascalCase(k), useNullable)},`
     )
     .join('\n');
 
-  const toMapBody = Object.keys(sample)
+  const toMapBody = keys
     .map((k) => `      '${k}': ${toMapExpr(k, sample[k], toPascalCase(k))},`)
     .join('\n');
 
-  const emptyBody = Object.keys(sample)
+  const emptyBody = keys
     .map((k) => `      ${k}: ${getDefaultValue(sample[k], k, useNullable)},`)
     .join('\n');
 
-  const maybeEmbedded = withLocalStorage ? '@embedded\n' : '';
+  const propsList = keys.join(', ');
+
+  let deco = '';
+  if (storageKind === 'isar') deco = '@embedded\n';
+  if (storageKind === 'hive') deco = `@HiveType(typeId: ${(hiveTypeIdRef ? hiveTypeIdRef.current++ : 0)})\n`;
 
   return `
-${maybeEmbedded}class ${className} {
+${deco}class ${className} extends Equatable {
 ${fieldsStr}
 
   ${className}({
@@ -375,6 +473,9 @@ ${toMapBody}
   factory ${className}.empty() => ${className}(
 ${emptyBody}
   );
+
+  @override
+  List<Object?> get props => [${propsList}];
 }
 `;
 }
@@ -431,7 +532,7 @@ ${copyParams}
 /* ================= Codegen: Mappers (Extensions) ================= */
 
 function generateMapperFile(base: string, formatted: string): string {
-  return `import '../domain/entities/${formatted}_entity.dart';
+  return `import '../../domain/entities/${formatted}_entity.dart';
 import '../models/${formatted}_model.dart';
 
 extension ${base}EntityToModelX on ${base}Entity {
